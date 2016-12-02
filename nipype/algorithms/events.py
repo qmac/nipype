@@ -23,13 +23,17 @@ except:
 
 class SpecifyEventsInputSpec(BaseInterfaceInputSpec):
     subject_info = InputMultiPath(Bunch, mandatory=True, xor=['subject_info',
-                                                              'event_files'],
+                                                              'event_files' , 'bids_events'],
                                   desc=("Bunch or List(Bunch) subject specific condition information. "
                                         "see :ref:`SpecifyModel` or SpecifyModel.__doc__ for details"))
     event_files = InputMultiPath(traits.List(File(exists=True)), mandatory=True,
-                                 xor=['subject_info', 'event_files'],
+                                 xor=['subject_info', 'event_files', 'bids_events'],
                                  desc=('list of event description files in 1, 2, 3, or 4 column format '
                                        'corresponding to onsets, durations, amplitudes, and output'))
+    bids_events = InputMultiPath(traits.List(File(exists=True)), mandatory=True,
+                                 xor=['subject_info', 'event_files', 'bids_events'],
+                                 desc=('a BIDS events.tsv file containing onsets and durations '
+                                       'and regressors as columns.'))
     input_units = traits.Enum('secs', 'scans', mandatory=True,
                               desc=("Units of event onsets and durations (secs or scans). Output "
                                     "units are always in secs"))
@@ -55,10 +59,14 @@ class SpecifyEvents(BaseInterface):
         if isdefined(self.inputs.subject_info):
             info = self.inputs.subject_info
             return pd.from_records(info) ## Pretty sure this doesn't work
-        else:
+        elif isdefined(self.inputs.event_files):
             info = self.inputs.event_files
             reader = EventReader(columns=['onset', 'duration', 'amplitude'])
             return reader.read(info[0])
+        else:
+            info = self.inputs.bids_events
+            reader = BIDSEventReader()
+            return reader.read(info[0])  
 
     def _transform_events(self):
         events = self._get_event_data()
