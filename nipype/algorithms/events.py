@@ -12,7 +12,7 @@ from os.path import basename
 import json
 iflogger = logging.getLogger('interface')
 
-from coda import EventReader, EventTransformer
+from coda import EventReader, EventTransformer, BIDSEventReader
 
 have_pandas = True
 try:
@@ -30,7 +30,7 @@ class SpecifyEventsInputSpec(BaseInterfaceInputSpec):
                                  xor=['subject_info', 'event_files', 'bids_events'],
                                  desc=('list of event description files in 1, 2, 3, or 4 column format '
                                        'corresponding to onsets, durations, amplitudes, and output'))
-    bids_events = InputMultiPath(traits.List(File(exists=True)), mandatory=True,
+    bids_events = InputMultiPath(File(exists=True), mandatory=True,
                                  xor=['subject_info', 'event_files', 'bids_events'],
                                  desc=('a BIDS events.tsv file containing onsets and durations '
                                        'and regressors as columns.'))
