@@ -65,14 +65,14 @@ class SpecifyEvents(BaseInterface):
             return reader.read(info[0])
         else:
             info = self.inputs.bids_events
-            reader = BIDSEventReader()
+            reader = BIDSEventReader()  
             return reader.read(info[0])  
 
     def _transform_events(self):
         events = self._get_event_data()
         self.transformer = EventTransformer(events)
         if isdefined(self.inputs.transformations):
-            transformer.apply_from_json(self.inputs.transformations)
+            self.transformer.apply_from_json(self.inputs.transformations)
 
         self.transformer.resample(self.inputs.time_repetition)
 
@@ -97,7 +97,7 @@ class SpecifyEvents(BaseInterface):
 
         for col in cols:
             info.onsets.append(onsets)
-            info.durations.append(self.inputs.time_repetition)
+            info.durations.append([self.inputs.time_repetition])
             info.amplitudes.append(_data[col].values.tolist())
 
         return info
