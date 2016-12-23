@@ -1,7 +1,7 @@
 from __future__ import division
 
 import numpy as np
-from nipype.external.six import string_types
+from six import string_types
 from nipype.interfaces.base import (BaseInterface, TraitedSpec, InputMultiPath,
                                traits, File, Bunch, BaseInterfaceInputSpec,
                                isdefined, OutputMultiPath)
@@ -30,7 +30,7 @@ class SpecifyEventsInputSpec(BaseInterfaceInputSpec):
                                  xor=['subject_info', 'event_files', 'bids_events'],
                                  desc=('list of event description files in 1, 2, 3, or 4 column format '
                                        'corresponding to onsets, durations, amplitudes, and output'))
-    bids_events = InputMultiPath(traits.List(File(exists=True)), mandatory=True,
+    bids_events = InputMultiPath(File(exists=True), mandatory=True,
                                  xor=['subject_info', 'event_files', 'bids_events'],
                                  desc=('BIDS events.tsv file(s) containing onsets and durations '
                                        'and regressors for each run.'))
@@ -68,15 +68,17 @@ class SpecifyEvents(BaseInterface):
         else:
             info = self.inputs.bids_events
             reader = BIDSEventReader()  
-            return reader.read(info)  
+            return [reader.read(event) for event in info]
 
     def _transform_events(self):
         events = self._get_event_data()
-        self.transformer = EventTransformer(events)
-        if isdefined(self.inputs.transformations):
-            self.transformer.apply_from_json(self.inputs.transformations)
-
-        self.transformer.resample(self.inputs.time_repetition)
+          self.data = []
+          for event in events:
+            transformer = EventTransformer(event)
+            if isdefined(self.inputs.transformations):[]
+              transformer.apply_from_json(self.inputs.transformations)
+            transformer.resample(self.inputs.time_repetition)
+            self.data.append(transformer.data)
 
     def _run_interface(self, runtime):
         if not have_pandas:
@@ -90,24 +92,24 @@ class SpecifyEvents(BaseInterface):
         if not hasattr(self, 'transformer'):
             self._transform_events()
 
-        _data = self.transformer.get_data()
+        _data = self.data
 
         bunches = []
         for run in _data:
             info = Bunch(conditions=[], onsets=[], durations=[], amplitudes=[])
-            cols = [c for c in _data.columns if c not in {'onset'}]
-            onsets = _data['onset'].values.tolist()
+            cols = [c for c in run.columns if c not in {'onset'}]
+            onsets = run['onset'].values.tolist()
             info.conditions = cols
 
             for col in cols:
                 info.onsets.append(onsets)
                 info.durations.append([self.inputs.time_repetition])
-                info.amplitudes.append(_data[col].values.tolist())
+                info.amplitudes.append(run[col].values.tolist())
 
-            bunches.append(run)
+            bunches.append(info)
 
         return bunches
-        
+
     def _list_outputs(self):
         outputs = self._outputs().get()
         outputs['subject_info'] = self._df_to_bunch()
