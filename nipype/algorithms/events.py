@@ -1,7 +1,6 @@
 from __future__ import division
 
 import numpy as np
-from six import string_types
 from nipype.interfaces.base import (BaseInterface, TraitedSpec, InputMultiPath,
                                traits, File, Bunch, BaseInterfaceInputSpec,
                                isdefined, OutputMultiPath)
@@ -12,7 +11,7 @@ from os.path import basename
 import json
 iflogger = logging.getLogger('interface')
 
-from coda import EventReader, EventTransformer, BIDSEventReader
+from coda import FSLEventReader, EventTransformer, BIDSEventReader
 
 have_pandas = True
 try:
@@ -50,7 +49,7 @@ class SpecifyEventsOutputSpec(TraitedSpec):
     subject_info = OutputMultiPath(Bunch, mandatory=True,
                                   desc=("Bunch or List(Bunch) subject specific condition information. "
                                         "see :ref:`SpecifyModel` or SpecifyModel.__doc__ for details"))
-
+    str_info = traits.String(mandatory=False)
 
 class SpecifyEvents(BaseInterface):
 
@@ -72,13 +71,13 @@ class SpecifyEvents(BaseInterface):
 
     def _transform_events(self):
         events = self._get_event_data()
-          self.data = []
-          for event in events:
-            transformer = EventTransformer(event)
-            if isdefined(self.inputs.transformations):[]
-              transformer.apply_from_json(self.inputs.transformations)
-            transformer.resample(self.inputs.time_repetition)
-            self.data.append(transformer.data)
+        self.data = []
+        for event in events:
+          transformer = EventTransformer(event)
+          if isdefined(self.inputs.transformations):
+            transformer.apply_from_json(self.inputs.transformations)
+          transformer.resample(self.inputs.time_repetition)
+          self.data.append(transformer.data)
 
     def _run_interface(self, runtime):
         if not have_pandas:
@@ -112,6 +111,7 @@ class SpecifyEvents(BaseInterface):
 
     def _list_outputs(self):
         outputs = self._outputs().get()
+        outputs['str_info'] = str([d.to_dict() for d in self.data])
         outputs['subject_info'] = self._df_to_bunch()
         return outputs
 
