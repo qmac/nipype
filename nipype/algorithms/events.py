@@ -33,6 +33,10 @@ class SpecifyEventsInputSpec(BaseInterfaceInputSpec):
                                  xor=['subject_info', 'event_files', 'bids_events'],
                                  desc=('BIDS events.tsv file(s) containing onsets and durations '
                                        'and regressors for each run.'))
+    amplitude_column = traits.String(mandatory=False, requires='bids_events', 
+                                 desc=("Column in events file to read amplitude from"))
+    condition_column = traits.String(mandatory=False, requires='bids_events', 
+                                 desc=("Column in events file that codes conditions"))
     input_units = traits.Enum('secs', 'scans', mandatory=True,
                               desc=("Units of event onsets and durations (secs or scans). Output "
                                     "units are always in secs"))
@@ -41,9 +45,6 @@ class SpecifyEventsInputSpec(BaseInterfaceInputSpec):
                                          "the next image volume."))
     transformations = traits.File(exists=True, mandatory=False,
                                      desc=("JSON specification of the transformations to perform."))
-    configuration = traits.File(exists=True, mandatory=False, 
-                                    desc=("JSON specification of the "))
-
 
 class SpecifyEventsOutputSpec(TraitedSpec):
     subject_info = OutputMultiPath(Bunch, mandatory=True,
@@ -66,7 +67,14 @@ class SpecifyEvents(BaseInterface):
             return reader.read(info[0])
         else:
             info = self.inputs.bids_events
-            reader = BIDSEventReader()  
+
+            kwargs = {}
+            if isdefined(self.inputs.amplitude_column):
+              kwargs['amplitude_column'] = self.inputs.amplitude_column
+            if isdefined(self.inputs.condition_column):
+              kwargs['condition_column'] = self.inputs.condition_column
+
+            reader = BIDSEventReader(**kwargs)  
             return [reader.read(event) for event in info]
 
     def _transform_events(self):
