@@ -1,15 +1,10 @@
 from __future__ import division
 
-import numpy as np
 from coda import FSLEventReader, EventTransformer, BIDSEventReader
 from nipype.interfaces.base import (BaseInterface, TraitedSpec, InputMultiPath,
                                     traits, File, Bunch, BaseInterfaceInputSpec,
                                     isdefined, OutputMultiPath)
 from nipype import logging
-import re
-from glob import glob
-from os.path import basename
-import json
 iflogger = logging.getLogger('interface')
 
 
