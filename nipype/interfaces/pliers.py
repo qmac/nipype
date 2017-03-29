@@ -5,6 +5,7 @@ from nipype.interfaces.base import (
 from nipype.utils.misc import package_check
 
 import pandas as pd
+from os.path import split
 
 have_pliers = True
 try:
@@ -33,7 +34,7 @@ class PliersInterface(BaseInterface):
     def _run_interface(self, runtime):
         # Configure the stimuli
         stims = []
-        event_df = pd.read_csv(self.inputs.events_file, na_values='n/a')
+        event_df = pd.read_csv(self.inputs.events_file, sep='\t', na_values='n/a')
         for event in event_df.iterrows():
             stim = load_stims(event['stim_file'])
             stim.onset = event['onset']
@@ -43,13 +44,13 @@ class PliersInterface(BaseInterface):
         # Construct and run the graph
         graph = Graph(self.inputs.graph_spec)
         results = graph.run(stims)
-        print(results)
 
         # Format and write the output
         results = to_long_format(results)
         event_df = pd.concat([event_df, results], axis=1)
-        event_df.to_csv(self.inputs.events_file)
-        setattr(self, '_events_file', self.inputs.events_file)
+        output_events_file = split(self.inputs.events_file)[0] + '/pliers_events.tsv'
+        event_df.to_csv(output_events_file, sep='\t')
+        setattr(self, '_events_file', output_events_file)
         return runtime
 
     def _list_outputs(self):
