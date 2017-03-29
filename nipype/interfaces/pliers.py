@@ -1,8 +1,8 @@
-from nipype.interfaces.base import (
+from ..interfaces.base import (
     BaseInterfaceInputSpec, BaseInterface,
     File, TraitedSpec, traits
 )
-from nipype.utils.misc import package_check
+from ..utils.misc import package_check
 
 import pandas as pd
 from os.path import split
