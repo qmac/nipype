@@ -23,11 +23,14 @@ if not missing_packages:
 
 
 class PliersInterfaceInputSpec(BaseInterfaceInputSpec):
+    bids_dir = Directory(exists=True, mandatory=True,
+                         desc=('A BIDS directory.'))
     graph_spec = File(exists=True, mandatory=True,
-                                  desc=("JSON specification of the features to extract."))
-    subset = traits.Dict(mandatory=False, desc=("Dictionary of entities on which to filter,"
-                                                "event files."))
-    bids_dir = Directory(exists=True, mandatory=True, desc=('A BIDS directory.'))
+                      desc=("JSON specification of the features to extract."))
+    subset = traits.Dict(mandatory=False,
+                         desc=("Dictionary of entities on which to filter event files."))
+    keep_original = traits.Bool(True, mandatory=False,
+                                desc=("Keep original events in new event files"))
 
 class PliersInterfaceOutputSpec(TraitedSpec):
     event_files = OutputMultiPath(File,
@@ -99,7 +102,10 @@ class PliersInterface(BaseInterface):
                                               'feature': 'extractor_feature'})
 
             # Create and write files
-            event_df = pd.concat([df, results], axis=0)
+            if self.inputs.keep_original:
+                event_df = pd.concat([df, results], axis=0)
+            else:
+                event_df = results
 
             ### Maybe re-order
             output_file = abspath(basename(evf))
