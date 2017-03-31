@@ -1,23 +1,25 @@
 from ..interfaces.base import (
     BaseInterfaceInputSpec, BaseInterface,
-    File, TraitedSpec, InputMultiPath, OutputMultiPath, traits,
+    File, TraitedSpec, OutputMultiPath, traits,
     Directory
 )
 from ..utils.misc import package_check
 
 from os.path import abspath, basename, join
 
-for package in ['pandas', 'pliers']:
+missing_packages = []
+for package in ['pandas', 'bids', 'pliers']:
     try:
         package_check(package)
     except Exception as e:
-        raise ImportError(
-            "The package {} is required, but not installed".format(package))
+        missing_packages.append(package)
 
-from pliers.graph import Graph
-from pliers.stimuli import load_stims
-from pliers.export import to_long_format
-import pandas as pd
+if not missing_packages:
+    import pandas as pd
+    from pliers.graph import Graph
+    from pliers.stimuli import load_stims
+    from pliers.export import to_long_format
+    from bids.grabbids import BIDSLayout
 
 
 class PliersInterfaceInputSpec(BaseInterfaceInputSpec):
@@ -35,29 +37,53 @@ class PliersInterface(BaseInterface):
     input_spec = PliersInterfaceInputSpec
     output_spec = PliersInterfaceOutputSpec
 
-    def _get_events(bids_dir, subset):
-        """ Get a subject's event files """
-        from bids.grabbids import BIDSLayout
-        layout = BIDSLayout(bids_dir)
-        events = layout.get(type='events', return_type='file', **subset)
-        return events
+    def _get_events(self, bids_dir, subset):
+        """ Get a subject's event files.
+        Scan all the images and get the corresponding event files.
+        For now assume all event filenames have entities . """
+        project = BIDSLayout(bids_dir)
+
+        images = project.get(return_type='file', modality='func',
+                                  extensions='.nii.gz', type='bold', **subset)
+        if not images:
+            raise Exception("No functional runs matching the request subset"
+                            "found in BIDS project.")
+
+        all_events = []
+        for img_f in images:
+            ## HARDCODED FOR DEVELOPMENT
+            entities = ['run', 'session', 'subject', 'task']
+            f_ents = project.files[img_f].entities
+            f_ents = {k: v for k, v in f_ents.items() if k in entities}
+
+            image_events = project.get(
+                return_type='file', extensions='.tsv', type='events', **f_ents)
+
+            if len(image_events) > 1:
+                raise Exception("Found more than one event file per image")
+            else:
+                all_events.append(image_events[0])
+
+        return all_events
 
     def _run_interface(self, runtime):
         stimuli_folder = join(self.inputs.bids_dir, 'stimuli')
+        event_files = self._get_events(self.inputs.bids_dir, self.inputs.subset)
 
+        print(event_files)
         # For each event file
         output_event_files = []
-        for event_file in self.inputs.event_files:
+        for evf in event_files:
             stims = []
-            event_df = pd.read_csv(event_file, sep='\t', na_values='n/a')
+            df = pd.read_csv(evf, sep='\t', na_values='n/a')
+
             # For each stimulus
-            for i, event in event_df.iterrows():
+            for i, event in df.iterrows():
                 stim_file = event['stim_file']
                 if pd.isnull(stim_file) is False:
                     stim = load_stims(join(stimuli_folder, event['stim_file']))
                     stim.onset = event['onset']
                     stim.duration = event['duration']
-                    stim.name = event['stim_file']
                     stims.append(stim)
 
             # Construct and run the graph
@@ -67,16 +93,16 @@ class PliersInterface(BaseInterface):
             # Format and write the output
             results = to_long_format(results)
 
-            # Rename "stim" to "stim_file"
-            results = results.rename(columns={'stim': 'stim_file',
-                                              'value': 'extractor_value',
+            # Rename columns
+            # Still need to get filename
+            results = results.rename(columns={'value': 'extractor_value',
                                               'feature': 'extractor_feature'})
 
             # Create and write files
-            event_df = pd.concat([event_df, results], axis=0)
+            event_df = pd.concat([df, results], axis=0)
 
             ### Maybe re-order
-            output_file = abspath(basename(event_file))
+            output_file = abspath(basename(evf))
             event_df.to_csv(output_file, sep='\t', index=False)
 
             output_event_files.append(output_file)
