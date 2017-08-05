@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """The fix module provides classes for interfacing with the `FSL FIX
@@ -53,8 +54,9 @@ fix_pipeline.write_graph()
 outgraph = fix_pipeline.run()
 
 """
+from __future__ import print_function, division, unicode_literals, absolute_import
 
-from nipype.interfaces.base import (
+from ..base import (
     TraitedSpec,
     CommandLineInputSpec,
     CommandLine,
@@ -64,12 +66,9 @@ from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     traits
 )
-from nipype.interfaces.traits_extension import (
-    Directory,
-    File,
-    isdefined
-)
+from ..traits_extension import Directory, File, isdefined
 import os
+
 
 class TrainingSetCreatorInputSpec(BaseInterfaceInputSpec):
     mel_icas_in = InputMultiPath(Directory(exists=True), copyfile=False,
@@ -255,8 +254,8 @@ class CleanerInputSpec(CommandLineInputSpec):
                                  desc='cleanup motion confounds, looks for design.fsf for highpass filter cut-off',
                                  position=2)
 
-    highpass = traits.Float(argstr='-m -h %f',
-                            desc='cleanup motion confounds', value=100, position=2)
+    highpass = traits.Float(100, argstr='-m -h %f', usedefault=True,
+                            desc='cleanup motion confounds', position=2)
 
     aggressive = traits.Bool(argstr='-A',
                              desc='Apply aggressive (full variance) cleanup, instead of the default less-aggressive (unique variance) cleanup.', position=3)

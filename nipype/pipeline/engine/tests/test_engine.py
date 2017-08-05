@@ -456,6 +456,24 @@ def test_mapnode_iterfield_check():
     with pytest.raises(ValueError): mod1._check_iterfield()
 
 
+@pytest.mark.parametrize("x_inp, f_exp", [
+        (3, [6]), ([2, 3], [4, 6]), ((2, 3), [4, 6]),
+        (range(3), [0, 2, 4]),
+         ("Str", ["StrStr"]), (["Str1", "Str2"], ["Str1Str1", "Str2Str2"])
+        ])
+def test_mapnode_iterfield_type(x_inp, f_exp):
+    from nipype import MapNode, Function
+    def double_func(x):
+        return 2 * x
+    double = Function(["x"], ["f_x"], double_func)
+
+    double_node = MapNode(double, name="double", iterfield=["x"])
+    double_node.inputs.x = x_inp
+
+    res  = double_node.run()
+    assert res.outputs.f_x == f_exp
+
+
 def test_mapnode_nested(tmpdir):
     os.chdir(str(tmpdir))
     from nipype import MapNode, Function
@@ -484,6 +502,28 @@ def test_mapnode_nested(tmpdir):
     with pytest.raises(Exception) as excinfo:
         n2.run()
     assert "can only concatenate list" in str(excinfo.value)
+
+
+def test_mapnode_expansion(tmpdir):
+    os.chdir(str(tmpdir))
+    from nipype import MapNode, Function
+
+    def func1(in1):
+        return in1 + 1
+
+    mapnode = MapNode(Function(function=func1),
+                      iterfield='in1',
+                      name='mapnode')
+    mapnode.inputs.in1 = [1, 2]
+    mapnode.interface.num_threads = 2
+    mapnode.interface.estimated_memory_gb = 2
+
+    for idx, node in mapnode._make_nodes():
+        for attr in ('overwrite', 'run_without_submitting', 'plugin_args'):
+            assert getattr(node, attr) == getattr(mapnode, attr)
+        for attr in ('num_threads', 'estimated_memory_gb'):
+            assert (getattr(node._interface, attr) ==
+                    getattr(mapnode._interface, attr))
 
 
 def test_node_hash(tmpdir):
@@ -677,7 +717,8 @@ def test_write_graph_runs(tmpdir):
             mod2 = pe.Node(interface=EngineTestInterface(), name='mod2')
             pipe.connect([(mod1, mod2, [('output1', 'input1')])])
             try:
-                pipe.write_graph(graph2use=graph, simple_form=simple)
+                pipe.write_graph(graph2use=graph, simple_form=simple,
+                                 format='dot')
             except Exception:
                 assert False, \
                     'Failed to plot {} {} graph'.format(
@@ -708,7 +749,8 @@ def test_deep_nested_write_graph_runs(tmpdir):
             mod1 = pe.Node(interface=EngineTestInterface(), name='mod1')
             parent.add_nodes([mod1])
             try:
-                pipe.write_graph(graph2use=graph, simple_form=simple)
+                pipe.write_graph(graph2use=graph, simple_form=simple,
+                                 format='dot')
             except Exception as e:
                 assert False, \
                     'Failed to plot {} {} deep graph: {!s}'.format(

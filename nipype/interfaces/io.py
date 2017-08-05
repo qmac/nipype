@@ -71,7 +71,7 @@ def copytree(src, dst, use_hardlink=False):
     try:
         os.makedirs(dst)
     except OSError as why:
-        if 'File exists' in why:
+        if 'File exists' in why.strerror:
             pass
         else:
             raise why
@@ -687,7 +687,7 @@ class DataSink(IOBase):
                 try:
                     os.makedirs(outdir)
                 except OSError as inst:
-                    if 'File exists' in inst:
+                    if 'File exists' in inst.strerror:
                         pass
                     else:
                         raise(inst)
@@ -738,7 +738,7 @@ class DataSink(IOBase):
                         try:
                             os.makedirs(path)
                         except OSError as inst:
-                            if 'File exists' in inst:
+                            if 'File exists' in inst.strerror:
                                 pass
                             else:
                                 raise(inst)
@@ -869,7 +869,7 @@ class S3DataGrabber(IOBase):
         # get list of all files in s3 bucket
         conn = boto.connect_s3(anon=self.inputs.anon)
         bkt = conn.get_bucket(self.inputs.bucket)
-        bkt_files = list(k.key for k in bkt.list())
+        bkt_files = list(k.key for k in bkt.list(prefix=self.inputs.bucket_path))
 
         # keys are outfields, args are template args for the outfield
         for key, args in list(self.inputs.template_args.items()):
@@ -1256,8 +1256,10 @@ class SelectFiles(IOBase):
         infields = []
         for name, template in list(templates.items()):
             for _, field_name, _, _ in string.Formatter().parse(template):
-                if field_name is not None and field_name not in infields:
-                    infields.append(field_name)
+                if field_name is not None:
+                    field_name = re.match("\w+", field_name).group()
+                    if field_name not in infields:
+                        infields.append(field_name)
 
         self._infields = infields
         self._outfields = list(templates)
@@ -1546,6 +1548,9 @@ class FSSourceOutputSpec(TraitedSpec):
         File(exists=True),
         desc='Distortion required to register to spherical atlas',
         loc='surf')
+    graymid = OutputMultiPath(
+        File(exists=True), desc='Graymid/midthickness surface meshes',
+        loc='surf', altkey=['graymid', 'midthickness'])
     label = OutputMultiPath(
         File(exists=True), desc='Volume and surface label files',
         loc='label', altkey='*label')
@@ -1610,19 +1615,19 @@ class FreeSurferSource(IOBase):
                 globprefix = self.inputs.hemi + '.'
             else:
                 globprefix = '?h.'
+            if key in ('aseg_stats', 'wmparc_stats'):
+                globprefix = ''
         elif key == 'ribbon':
             if self.inputs.hemi != 'both':
                 globprefix = self.inputs.hemi + '.'
             else:
                 globprefix = '*'
-        elif key in ('aseg_stats', 'wmparc_stats'):
-            globprefix = ''
-        keydir = os.path.join(path, dirval)
-        if altkey:
-            key = altkey
-        globpattern = os.path.join(
-            keydir, ''.join((globprefix, key, globsuffix)))
-        return [os.path.abspath(f) for f in glob.glob(globpattern)]
+        keys = filename_to_list(altkey) if altkey else [key]
+        globfmt = os.path.join(path, dirval,
+                               ''.join((globprefix, '{}', globsuffix)))
+        return [os.path.abspath(f)
+                for key in keys
+                for f in glob.glob(globfmt.format(key))]
 
     def _list_outputs(self):
         subjects_dir = self.inputs.subjects_dir

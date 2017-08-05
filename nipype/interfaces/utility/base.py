@@ -72,7 +72,7 @@ class IdentityInterface(IOBase):
         # Adding any traits wipes out all input values set in superclass initialization,
         # even it the trait is not in the add_traits argument. The work-around is to reset
         # the values after adding the traits.
-        self.inputs.set(**inputs)
+        self.inputs.trait_set(**inputs)
 
     def _add_output_traits(self, base):
         return add_traits(base, self._fields)
@@ -99,11 +99,27 @@ class IdentityInterface(IOBase):
 class MergeInputSpec(DynamicTraitedSpec, BaseInterfaceInputSpec):
     axis = traits.Enum('vstack', 'hstack', usedefault=True,
                        desc='direction in which to merge, hstack requires same number of elements in each input')
-    no_flatten = traits.Bool(False, usedefault=True, desc='append to outlist instead of extending in vstack mode')
+    no_flatten = traits.Bool(False, usedefault=True,
+                             desc='append to outlist instead of extending in vstack mode')
+    ravel_inputs = traits.Bool(False, usedefault=True,
+                               desc='ravel inputs when no_flatten is False')
 
 
 class MergeOutputSpec(TraitedSpec):
     out = traits.List(desc='Merged output')
+
+
+def _ravel(in_val):
+    if not isinstance(in_val, list):
+        return in_val
+    flat_list = []
+    for val in in_val:
+        raveled_val = _ravel(val)
+        if isinstance(raveled_val, list):
+            flat_list.extend(raveled_val)
+        else:
+            flat_list.append(raveled_val)
+    return flat_list
 
 
 class Merge(IOBase):
@@ -123,23 +139,34 @@ class Merge(IOBase):
     >>> out.outputs.out
     [1, 2, 5, 3]
 
-    >>> merge = Merge()   # Or Merge(1)
-    >>> merge.inputs.in_lists = [1, [2, 5], 3]
+    >>> merge = Merge(1)
+    >>> merge.inputs.in1 = [1, [2, 5], 3]
+    >>> out = merge.run()
+    >>> out.outputs.out
+    [1, [2, 5], 3]
+
+    >>> merge = Merge(1)
+    >>> merge.inputs.in1 = [1, [2, 5], 3]
+    >>> merge.inputs.ravel_inputs = True
     >>> out = merge.run()
     >>> out.outputs.out
     [1, 2, 5, 3]
 
+    >>> merge = Merge(1)
+    >>> merge.inputs.in1 = [1, [2, 5], 3]
+    >>> merge.inputs.no_flatten = True
+    >>> out = merge.run()
+    >>> out.outputs.out
+    [[1, [2, 5], 3]]
     """
     input_spec = MergeInputSpec
     output_spec = MergeOutputSpec
 
-    def __init__(self, numinputs=1, **inputs):
+    def __init__(self, numinputs=0, **inputs):
         super(Merge, self).__init__(**inputs)
         self._numinputs = numinputs
-        if numinputs > 1:
+        if numinputs >= 1:
             input_names = ['in%d' % (i + 1) for i in range(numinputs)]
-        elif numinputs == 1:
-            input_names = ['in_lists']
         else:
             input_names = []
         add_traits(self.inputs, input_names)
@@ -150,8 +177,6 @@ class Merge(IOBase):
 
         if self._numinputs < 1:
             return outputs
-        elif self._numinputs == 1:
-            values = self.inputs.in_lists
         else:
             getval = lambda idx: getattr(self.inputs, 'in%d' % (idx + 1))
             values = [getval(idx) for idx in range(self._numinputs)
@@ -160,7 +185,8 @@ class Merge(IOBase):
         if self.inputs.axis == 'vstack':
             for value in values:
                 if isinstance(value, list) and not self.inputs.no_flatten:
-                    out.extend(value)
+                    out.extend(_ravel(value) if self.inputs.ravel_inputs else
+                               value)
                 else:
                     out.append(value)
         else:
@@ -293,7 +319,7 @@ class Split(IOBase):
 
     >>> from nipype.interfaces.utility import Split
     >>> sp = Split()
-    >>> _ = sp.inputs.set(inlist=[1, 2, 3], splits=[2, 1])
+    >>> _ = sp.inputs.trait_set(inlist=[1, 2, 3], splits=[2, 1])
     >>> out = sp.run()
     >>> out.outputs.out1
     [1, 2]
@@ -347,12 +373,12 @@ class Select(IOBase):
 
     >>> from nipype.interfaces.utility import Select
     >>> sl = Select()
-    >>> _ = sl.inputs.set(inlist=[1, 2, 3, 4, 5], index=[3])
+    >>> _ = sl.inputs.trait_set(inlist=[1, 2, 3, 4, 5], index=[3])
     >>> out = sl.run()
     >>> out.outputs.out
     4
 
-    >>> _ = sl.inputs.set(inlist=[1, 2, 3, 4, 5], index=[3, 4])
+    >>> _ = sl.inputs.trait_set(inlist=[1, 2, 3, 4, 5], index=[3, 4])
     >>> out = sl.run()
     >>> out.outputs.out
     [4, 5]

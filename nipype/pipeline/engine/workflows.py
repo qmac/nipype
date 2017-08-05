@@ -425,6 +425,9 @@ connected.
                 base_dir = os.getcwd()
         base_dir = make_output_dir(base_dir)
         if graph2use in ['hierarchical', 'colored']:
+            if self.name[:1].isdigit(): # these graphs break if int
+                raise ValueError('{} graph failed, workflow name cannot begin '
+                                 'with a number'.format(graph2use))
             dotfilename = op.join(base_dir, dotfilename)
             self.write_hierarchical_dotfile(dotfilename=dotfilename,
                                             colored=graph2use == "colored",
@@ -554,7 +557,7 @@ connected.
         if not isinstance(plugin, (str, bytes)):
             runner = plugin
         else:
-            name = 'nipype.pipeline.plugins'
+            name = '.'.join(__name__.split('.')[:-2] + ['plugins'])
             try:
                 __import__(name)
             except ImportError:

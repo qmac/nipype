@@ -324,6 +324,12 @@ def test_mcflirt(setup_flirt):
     realcmd = 'mcflirt -in ' + infile + ' -out ' + outfile2
     assert frt.cmdline == realcmd
 
+
+@pytest.mark.skipif(no_fsl(), reason="fsl is not installed")
+def test_mcflirt_opt(setup_flirt):
+    tmpdir, infile, reffile = setup_flirt
+    _, nme = os.path.split(infile)
+
     opt_map = {
         'cost': ('-cost mutualinfo', 'mutualinfo'),
         'bins': ('-bins 256', 256),
@@ -344,6 +350,9 @@ def test_mcflirt(setup_flirt):
 
     for name, settings in list(opt_map.items()):
         fnt = fsl.MCFLIRT(in_file=infile, **{name: settings[1]})
+        outfile = os.path.join(os.getcwd(), nme)
+        outfile = fnt._gen_fname(outfile, suffix='_mcf')
+
         instr = '-in %s' % (infile)
         outstr = '-out %s' % (outfile)
         if name in ('init', 'cost', 'dof', 'mean_vol', 'bins'):
@@ -357,10 +366,14 @@ def test_mcflirt(setup_flirt):
                                             outstr,
                                             settings[0]])
 
+
+@pytest.mark.skipif(no_fsl(), reason="fsl is not installed")
+def test_mcflirt_noinput():
     # Test error is raised when missing required args
     fnt = fsl.MCFLIRT()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as excinfo:
         fnt.run()
+    assert str(excinfo.value).startswith("MCFLIRT requires a value for input 'in_file'")
 
 # test fnirt
 
@@ -380,7 +393,8 @@ def test_fnirt(setup_flirt):
               ('in_fwhm', '--infwhm', [4, 2, 2, 0], '4,2,2,0'),
               ('apply_refmask', '--applyrefmask', [0, 0, 1, 1], '0,0,1,1'),
               ('apply_inmask', '--applyinmask', [0, 0, 0, 1], '0,0,0,1'),
-              ('regularization_lambda', '--lambda', [0.5, 0.75], '0.5,0.75')]
+              ('regularization_lambda', '--lambda', [0.5, 0.75], '0.5,0.75'),
+              ('intensity_mapping_model', '--intmod', 'global_non_linear', 'global_non_linear')]
     for item, flag, val, strval in params:
         fnirt = fsl.FNIRT(in_file=infile,
                           ref_file=reffile,
@@ -393,7 +407,7 @@ def test_fnirt(setup_flirt):
                   ' %s=%s --ref=%s'\
                   ' --iout=%s' % (infile, log,
                                   flag, strval, reffile, iout)
-        elif item in ('in_fwhm'):
+        elif item in ('in_fwhm', 'intensity_mapping_model'):
             cmd = 'fnirt --in=%s %s=%s --logout=%s '\
                   '--ref=%s --iout=%s' % (infile, flag,
                                           strval, log, reffile, iout)
