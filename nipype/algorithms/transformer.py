@@ -1,9 +1,9 @@
 from __future__ import division
 
-from ..interfaces.base import (BaseInterface, TraitedSpec, InputMultiPath,
-                                    traits, File, Directory, Bunch,
+from ..interfaces.base import (BaseInterface, TraitedSpec,
+                                    traits, Directory,
                                     BaseInterfaceInputSpec,
-                                    isdefined, OutputMultiPath)
+                                    isdefined)
 from ..utils.misc import package_check
 from nipype import logging
 iflogger = logging.getLogger('interface')
@@ -11,7 +11,6 @@ iflogger = logging.getLogger('interface')
 from bids.events import BIDSEventCollection
 
 import os
-import glob
 
 try:
     package_check('pandas')
@@ -51,6 +50,12 @@ class TransformEventsInputSpec(BaseInterfaceInputSpec):
               "amplitude is missing."))
     time_repetition = traits.Float(
         mandatory=True, desc=("Sampling rate to output event files."))
+    columns = traits.List(
+        mandatory=False, desc=("Columns to keep on writeout")
+    )
+    header = traits.Bool(
+        mandtory=False, desc=("Keep file headers on write out")
+    )
 
 
 class TransformEventsOutputSpec(TraitedSpec):
@@ -72,6 +77,12 @@ class TransformEvents(BaseInterface):
             attr = getattr(self.inputs, arg)
             if isdefined(attr):
                 kwargs[arg] = attr
+
+        self.out_kwargs = {}
+        for arg in ['columns', 'header']:
+            attr = getattr(self.inputs, arg)
+            if isdefined(attr):
+                self.out_kwargs[arg] = attr
 
         ef_dir = self.inputs.event_files_dir \
             if isdefined(self.inputs.event_files_dir) else None
@@ -103,7 +114,10 @@ class TransformEvents(BaseInterface):
         path = os.path.join(os.getcwd(), 'new_events')
         if not os.path.exists(path):
             os.mkdir(path)
-        self._collection.write(path=path, sampling_rate=1./self.inputs.time_repetition)
+        self._collection.write(path=path,
+                               sampling_rate=1./self.inputs.time_repetition,
+                               sparse=False,
+                               **self.out_kwargs)
         return path
 
     def _list_outputs(self):
