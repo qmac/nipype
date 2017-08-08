@@ -9,7 +9,6 @@ from nipype import logging
 iflogger = logging.getLogger('interface')
 
 from bids.events import BIDSEventCollection
-from bids.events import BIDSTransformer
 
 import os
 import glob
@@ -25,15 +24,14 @@ class TransformEventsInputSpec(BaseInterfaceInputSpec):
     bids_directory = Directory(
         exists=True, mandatory=True,
         desc=('Path to the root of the BIDS project.'))
-    event_files_directory = InputMultiPath(
-        File(exists=True), mandatory=False, xor=['filters'],
+    event_files_dir = Directory(exists=True, mandatory=False, xor=['filters'],
         desc=('Directory containing event files to use, '
               'instead of those in BIDS directory'))
     filters = traits.Dict(
         mandatory=False, xor=['event_files_directory'],
         desc=("Additional entities to filter runs on."))
-    transformation_spec = File(
-        exists=True, mandatory=True,
+    transformation_spec = traits.Either([traits.List, traits.File(exists=True)],
+        mandatory=False,
         desc=("Path to JSON specification of the transformations to perform."))
     amplitude_column = traits.String(
         mandatory=False,
@@ -56,8 +54,7 @@ class TransformEventsInputSpec(BaseInterfaceInputSpec):
 
 
 class TransformEventsOutputSpec(TraitedSpec):
-    event_files = OutputMultiPath(
-        Bunch, mandatory=True,
+    event_files_dir = Directory(exists=True, mandatory=True,
         desc=("List of transformed event files"))
 
 
@@ -74,28 +71,25 @@ class TransformEvents(BaseInterface):
                     'default_amplitude']:
             attr = getattr(self.inputs, arg)
             if isdefined(attr):
-                kwargs['arg'] = attr
+                kwargs[arg] = attr
 
-        files_directory = self.inputs.event_files \
-            if isdefined(self.inputs.event_files_directory) else None
+        ef_dir = self.inputs.event_files_dir \
+            if isdefined(self.inputs.event_files_dir) else None
         filters = self.inputs.filters\
             if isdefined(self.inputs.filters) else {}
 
         event_collection = BIDSEventCollection(
             base_dir=self.inputs.bids_directory, **kwargs)
-        event_collection.read(files_directory, **filters)
-
+        event_collection.read(ef_dir, **filters)
         return event_collection
 
     def _transform_events(self):
         """ Apply transformations """
 
-        collection = self._get_collection()
-
-        self._transformer = BIDSTransformer(collection)
+        self._collection = self._get_collection()
 
         if isdefined(self.inputs.transformation_spec):
-            self._transformer.apply_from_json(self.inputs.transformation_spec)
+            self._collection.apply_from_json(self.inputs.transformation_spec)
 
 
     def _run_interface(self, runtime):
@@ -106,11 +100,13 @@ class TransformEvents(BaseInterface):
         return runtime
 
     def _get_event_files(self):
-        cd = os.getcwd()
-        self.transformer.write(path=cd, sampling_rate=1./self.inputs.TR)
-        return glob.glob(os.path.join(os.getcwd(), '*_events.tsv'))
+        path = os.path.join(os.getcwd(), 'new_events')
+        if not os.path.exists(path):
+            os.mkdir(path)
+        self._collection.write(path=path, sampling_rate=1./self.inputs.time_repetition)
+        return path
 
     def _list_outputs(self):
         outputs = self._outputs().get()
-        outputs['event_files'] = self._get_event_files()
+        outputs['event_files_dir'] = self._get_event_files()
         return outputs
